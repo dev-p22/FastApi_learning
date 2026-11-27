@@ -1,75 +1,53 @@
-from fastapi import FastAPI
-from pydantic import BaseModel
-from routes import todos
+from fastapi import FastAPI,Depends,Header,HTTPException,Request
+import time
 
 app = FastAPI()
 
+# Logger middleware
+@app.middleware("http")
+async def logger_middleware(request:Request,call_next):
+    start = time.time()
+
+    response = await call_next(request)
+
+    end = time.time()
+    print("path :",request.url.path ,end - start , "Time takend to execute")
+    return response
 
 
-class Address(BaseModel):
-    city:str
-    pincode:int
+# Middleware that run before req go to server function
+# @app.middleware("http")
+# async def middleware(request:Request,call_next):
+#     print("Request Recived")
 
-    
-class User(BaseModel):
-    name:str
-    age : int
-    password : str
-    address : Address # Link to Address Schema Nested JSON
+#     response = await call_next(request)
 
-class UserResponse(BaseModel):
-    name:str
-    age : int
-    address : Address
+#     print("Response Sent")
+#     return response
 
-class Product(BaseModel):
-    name : str
-    type : str
-    price : int
-
-
-app.include_router(todos.router)
-
-
-
-@app.get("/")
-def home():
-    return {"message":"Hello There"}
-
-@app.get("/about")
-def about():
-    return {"message" : "about page"}
-
-@app.get("/users", response_model=UserResponse) # it should return user response stricly how we define shcema for return
-def users():
-    return{"name" : "xzy" , "age":32 ,"address": { "pincode" : 23 , "city": "visnagar"} }
-
-# dynamic path
-@app.get("/users/{user_id}")
-def get_user(user_id : int):
-    return {"User_id":user_id}
-
-# Query Params /users?name=mohi&sort=asc
-#Always give optional params and also default value can be avilable as well
-@app.get("/products")
-def get_products(product : str = None, sort : str = None , limit : int = 10):
-    return {"Name":product , "sort" : sort , "limit" : limit}
-
-
-#post request
-@app.post("/create-user", status_code= 201)
-def create_user(user:User):
+def verify_token(token:str = Header(None)):
+    if token != "mysecrettoken":
+        raise HTTPException(status_code=401,detail="UnAuthorize")
     return {
-        "message" : "User Created",
-        "success" : True,
-        "data" : user
+        "user":"Authorized User"
+    }
+
+# dependancy injection use to tun same logic code for selected routes
+def current_user():
+    return {"User":"DC"}
+
+@app.get("/secure-route")
+def secure_route(user = Depends(verify_token)):
+    return {
+        "message":"Secure Data Access",
+        "user":user
     }
 
 
-@app.post("/create-product")
-def create_product(product:Product):
-    return {
-        "message" : "Product Created",
-        "Success" : True,
-        "data" : product
-    }
+@app.get("/profile")
+def get_profile(user = Depends(current_user)):    
+    return user
+
+@app.get("/dashboard")    
+def get_dashboard(user = Depends(current_user)):
+    return user

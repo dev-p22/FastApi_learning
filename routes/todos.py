@@ -1,48 +1,68 @@
-from fastapi import APIRouter,HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from database.database import get_db
+from models.todo import TodoModel
 
 router = APIRouter()
 
-todos = []
-
-#custom exceptions
-class TodosNotFoundEXception(Exception):
-    def __init__(self, name :str):
-        self.name = name
 
 class Todo(BaseModel):
-    id : int
-    title : str
-    completed : bool = False
+    title: str
+    completed: bool = False
+
+
+def todo_response(todo: TodoModel) -> dict:
+    return {
+        "id": todo.id,
+        "title": todo.title,
+        "completed": todo.completed,
+    }
+
 
 @router.get("/todos")
-def get_todos():
-    return {"Data":todos}
+def get_todos(db: Session = Depends(get_db)):
+    todos = db.query(TodoModel).all()
+    return {"Success": True, "Data": [todo_response(todo) for todo in todos]}
 
-@router.post("/todos")
-def add_todos(todo : Todo):
-    todos.append(todo)
-    return { "Success" : True , "Data" : todo}
+
+@router.post("/todos", status_code=201)
+def add_todo(todo: Todo, db: Session = Depends(get_db)):
+    db_todo = TodoModel(title=todo.title, completed=todo.completed)
+    db.add(db_todo)
+    db.commit()
+    db.refresh(db_todo)
+    return {"Success": True, "Data": todo_response(db_todo)}
+
 
 @router.get("/todos/{id}")
-def get_todo(id : int):
-    for todo in todos:
-        if todo.id == id:
-            return todo
-    raise HTTPException(status_code=404 , detail="Todo Not Found")
+def get_todo(id: int, db: Session = Depends(get_db)):
+    todo = db.query(TodoModel).filter(TodoModel.id == id).first()
+    if todo is None:
+        raise HTTPException(status_code=404, detail="Todo Not Found")
+    return {"Success": True, "Data": todo_response(todo)}
+
 
 @router.put("/todos/{id}")
-def update_todo(id:int,updated_todo:Todo):
-    for index,todo in enumerate(todos):
-        if todo.id == id:
-            todos[index] = updated_todo
-            return {"success" : True , "Data" : updated_todo}
-    return {"Error":"Todo Not Found"}
+def update_todo(id: int, updated_todo: Todo, db: Session = Depends(get_db)):
+    todo = db.query(TodoModel).filter(TodoModel.id == id).first()
+    if todo is None:
+        raise HTTPException(status_code=404, detail="Todo Not Found")
+
+    todo.title = updated_todo.title
+    todo.completed = updated_todo.completed
+    db.commit()
+    db.refresh(todo)
+    return {"Success": True, "Data": todo_response(todo)}
 
 
 @router.delete("/todos/{id}")
-def delete_todo(id:int):
-    for index,todo in enumerate(todos):
-        if(todo.id) == id:
-            todos.pop(index)
-            return {"Success": True}        
+def delete_todo(id: int, db: Session = Depends(get_db)):
+    todo = db.query(TodoModel).filter(TodoModel.id == id).first()
+    if todo is None:
+        raise HTTPException(status_code=404, detail="Todo Not Found")
+
+    db.delete(todo)
+    db.commit()
+    return {"Success": True}

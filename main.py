@@ -1,53 +1,54 @@
-from fastapi import FastAPI,Depends,Header,HTTPException,Request
-import time
+# import sqlite3
+from fastapi import Depends, FastAPI
+
+from database.database import Base, engine
+from routes import todos
 
 app = FastAPI()
 
-# Logger middleware
-@app.middleware("http")
-async def logger_middleware(request:Request,call_next):
-    start = time.time()
+app.include_router(todos.router)
+# conn = sqlite3.connect("test.db", check_same_thread=False)
 
-    response = await call_next(request)
+# cursor = conn.cursor()  # use to run sqlquery
 
-    end = time.time()
-    print("path :",request.url.path ,end - start , "Time takend to execute")
-    return response
-
-
-# Middleware that run before req go to server function
-# @app.middleware("http")
-# async def middleware(request:Request,call_next):
-#     print("Request Recived")
-
-#     response = await call_next(request)
-
-#     print("Response Sent")
-#     return response
-
-def verify_token(token:str = Header(None)):
-    if token != "mysecrettoken":
-        raise HTTPException(status_code=401,detail="UnAuthorize")
-    return {
-        "user":"Authorized User"
-    }
-
-# dependancy injection use to tun same logic code for selected routes
-def current_user():
-    return {"User":"DC"}
-
-@app.get("/secure-route")
-def secure_route(user = Depends(verify_token)):
-    return {
-        "message":"Secure Data Access",
-        "user":user
-    }
+# cursor.execute("""
+# CREATE TABLE IF NOT EXISTS  todos(
+#                         id  INTEGER PRIMARY KEY,
+#                         title TEXT,
+#                         completed TEXT
+# )
+# """)
+# conn.commit()
 
 
-@app.get("/profile")
-def get_profile(user = Depends(current_user)):    
-    return user
+# DATABASE_URL = "sqlite:///./test.db"
 
-@app.get("/dashboard")    
-def get_dashboard(user = Depends(current_user)):
-    return user
+# engine = create_engine(
+#     DATABASE_URL, connect_args={"check_same_thread": False}
+# )  # db connect
+
+# sessionLocal = sessionmaker(bind=engine)  # db operations
+
+# Base = declarative_base()
+
+
+# class Todo(Base):
+#     __tablename__ = "todos"
+
+#     id = Column(Integer, primary_key=True, index=True)
+#     title = Column(String)
+#     completed = Column(Boolean)
+
+
+Base.metadata.create_all(bind=engine)
+
+
+# def get_db():
+#     db = sessionLocal()
+#     try:
+#         yield db
+#     finally:
+#         db.close()
+
+
+
